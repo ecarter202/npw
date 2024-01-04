@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"nwp/config"
 	"nwp/models"
 	"nwp/shared"
 	"os"
@@ -16,13 +17,19 @@ const (
 	CSS_ANSWER_BOX    = "ul > li"
 )
 
-func scrape(files ...string) error {
+func scrape(filesDir string) error {
 	cachedQuestions = []*models.Question{}
 	seen := map[string]bool{}
 
-	for _, f := range files {
+	files, err := os.ReadDir(filesDir)
+	if err != nil {
+		return err
+	}
 
-		file, err := os.Open(f)
+	for _, f := range files {
+		filepath := fmt.Sprintf("%s/%s", config.HTML_FILES_DIR, f.Name())
+
+		file, err := os.Open(filepath)
 		if err != nil {
 			return fmt.Errorf("reading file [%s] [ERR: %s]\n", f, err)
 		}

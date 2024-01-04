@@ -28,7 +28,7 @@ func main() {
 		// }
 		// defer db.Close()
 
-		err := scrape("./files/comptia_networkplus_n10_008_acronymns.html")
+		err := scrape(config.HTML_FILES_DIR)
 		if err != nil {
 			log.Fatal(err)
 		}
