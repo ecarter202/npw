@@ -17,13 +17,13 @@ const (
 	CSS_ANSWER_BOX    = "ul > li"
 )
 
-func scrape(filesDir string) error {
+func scrape(filesDir string) (cachedQuestions []*models.Question, err error) {
 	cachedQuestions = []*models.Question{}
 	seen := map[string]bool{}
 
 	files, err := os.ReadDir(filesDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, f := range files {
@@ -31,13 +31,13 @@ func scrape(filesDir string) error {
 
 		file, err := os.Open(filepath)
 		if err != nil {
-			return fmt.Errorf("reading file [%s] [ERR: %s]\n", f, err)
+			return nil, fmt.Errorf("reading file [%s] [ERR: %s]\n", f, err)
 		}
 		defer file.Close()
 
 		doc, err := goquery.NewDocumentFromReader(file)
 		if err != nil {
-			return fmt.Errorf("document from reader (file) [%s] [ERR: %s]\n", f, err)
+			return nil, fmt.Errorf("document from reader (file) [%s] [ERR: %s]\n", f, err)
 		}
 
 		// iterate over the questions in HTML
@@ -55,12 +55,13 @@ func scrape(filesDir string) error {
 
 				// iterate over the answers for this question
 				s.Find(CSS_ANSWER_BOX).Each(func(ii int, ss *goquery.Selection) {
+					aText := ss.Text()
 					answer := &models.Answer{
-						Text:   shared.SanitizeText(ss.Text()),
+						Text:   shared.SanitizeText(aText),
 						Letter: letterFromIndex(ii),
 					}
 
-					if strings.Contains(ss.Text(), "( Missed)") {
+					if strings.Contains(aText, "Missed)") {
 						answer.IsCorrect = true
 					}
 
@@ -75,14 +76,7 @@ func scrape(filesDir string) error {
 		})
 	}
 
-	// print out all questions as JSON
-	// b, err := json.MarshalIndent(cachedQuestions, "", "    ")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// fmt.Println(string(b))
-
-	return nil
+	return cachedQuestions, nil
 }
 
 func letterFromIndex(i int) string {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"nwp/config"
+	"nwp/models"
+	"nwp/quiz"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -20,6 +22,7 @@ func main() {
 	flag.BoolVar(&setup, "init", setup, "Initialize setup? This populates the DB with questions.")
 	flag.Parse()
 
+	var questions []*models.Question
 	if setup {
 		// maybe use a db? not sure yet...
 		// err = initDB()
@@ -28,15 +31,16 @@ func main() {
 		// }
 		// defer db.Close()
 
-		err := scrape(config.HTML_FILES_DIR)
+		questions, err = scrape(config.HTML_FILES_DIR)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	startQuiz(cachedQuestions)
-
-	fmt.Println("DONE")
+	quiz.New(questions,
+		quiz.OptRandomize,
+		quiz.OptSetLength(5),
+	).Start()
 }
 
 func initDB() error {
