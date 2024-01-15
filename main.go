@@ -12,18 +12,20 @@ import (
 )
 
 var (
-	setup bool
+	_setup         bool
+	_questionCount = 25
 
 	db  *bolt.DB
 	err error
 )
 
 func main() {
-	flag.BoolVar(&setup, "init", setup, "Initialize setup? This populates the DB with questions.")
+	flag.BoolVar(&_setup, "init", _setup, "Initialize setup? This populates the DB with questions.")
+	flag.IntVar(&_questionCount, "n", _questionCount, "Number of questions in your quiz.")
 	flag.Parse()
 
 	var questions []*models.Question
-	if setup {
+	if _setup {
 		// maybe use a db? not sure yet...
 		// err = initDB()
 		// if err != nil {
@@ -37,9 +39,13 @@ func main() {
 		}
 	}
 
+	if len(questions) == 0 {
+		log.Fatal("no questions found... need to --init ?")
+	}
+
 	quiz.New(questions,
 		quiz.OptRandomize,
-		quiz.OptSetLength(5),
+		quiz.OptSetLength(_questionCount),
 	).Start()
 }
 
