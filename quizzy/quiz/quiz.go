@@ -2,7 +2,10 @@ package quiz
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
+	"quizzy/config"
+	"quizzy/database"
 	"quizzy/models"
 	"slices"
 	"strings"
@@ -12,12 +15,14 @@ import (
 )
 
 var (
-	correct = color.New(color.FgGreen)
-	wrong   = color.New(color.FgRed)
+	blue  = color.New(color.FgHiBlue)
+	green = color.New(color.FgGreen)
+	red   = color.New(color.FgRed)
 )
 
 type (
 	Quiz struct {
+		*database.Database
 		*models.Subject
 
 		Opts
@@ -52,27 +57,46 @@ func OptSetLength(i int) OptsFunc {
 }
 
 // New creates a new quiz
-func New(questions []*models.Question, opts ...OptsFunc) *Quiz {
+func New(questionPool []*models.Question, opts ...OptsFunc) *Quiz {
+	db, err := database.New(config.DB_NAME)
+	if err != nil {
+		log.Fatalf("creating database [ERR: %s]", err)
+	}
+
 	o := defaultOpts()
 
 	for _, fn := range opts {
 		fn(&o)
 	}
 
-	return &Quiz{
-		Opts:      o,
-		Questions: questions,
+	quiz := &Quiz{
+		Database: db,
+		Opts:     o,
 	}
-}
-
-func (quiz *Quiz) Start() {
 
 	if quiz.IsRandomized {
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		r.Shuffle(len(quiz.Questions), func(i, j int) {
-			quiz.Questions[i], quiz.Questions[j] = quiz.Questions[j], quiz.Questions[i]
+		r.Shuffle(len(questionPool), func(i, j int) {
+			questionPool[i], questionPool[j] = questionPool[j], questionPool[i]
 		})
+		for _, q := range questionPool {
+			r.Shuffle(len(q.Answers), func(i, j int) {
+				q.Answers[i], q.Answers[j] = q.Answers[j], q.Answers[i]
+			})
+		}
 	}
+
+	questions := questionPool[:quiz.Length]
+
+	quiz.Questions = questions
+	quiz.total = float64(len(questions))
+
+	return quiz
+}
+
+func (quiz *Quiz) Start() {
+	blue.Printf("%d questions. Go!\n", len(quiz.Questions))
+	fmt.Println()
 
 	for i, q := range quiz.Questions {
 		if quiz.Length > 0 && i >= quiz.Length {
@@ -85,16 +109,16 @@ func (quiz *Quiz) Start() {
 			correctAnswers = map[string]bool{}
 		)
 
-		for _, a := range q.Answers {
+		for ii, a := range q.Answers {
+			a.Letter = letterFromIndex(ii)
 			if a.IsCorrect {
 				correctAnswers[a.Letter] = true
 			}
 		}
-		quiz.total++ // add to possible points for this quiz
 
-		fmt.Println(q.Text)
+		fmt.Printf("%d) %s\n", i+1, q.Text)
 		for _, a := range q.Answers {
-			fmt.Printf("%s) %s\n", a.Letter, a.Text)
+			fmt.Printf("	%s) %s\n", a.Letter, a.Text)
 		}
 		fmt.Scanln(&userInput)
 
@@ -105,25 +129,32 @@ func (quiz *Quiz) Start() {
 		}
 
 		if answeredCorrectly(userAnswers, correctAnswers) {
-			correct.Println("Correct!")
-			qScore := questionScore(userAnswers, correctAnswers)
-			quiz.score += qScore // add to quiz score
+			green.Println("Correct!")
+			quiz.DelMissed(q.ID)
 		} else {
 			answerLetters := mapKeys(correctAnswers)
 			slices.Sort(answerLetters)
-			wrong.Printf("Correct Answer: [%s]\n", strings.Join(answerLetters, ", "))
+			red.Printf("Correct Answer: [%s]\n", strings.Join(answerLetters, ", "))
+
+			err := quiz.AddMissed(q)
+			if err != nil {
+				log.Fatalf("adding missed question \n%s\n [ERR: %s]", q.JSON(), err)
+			}
 		}
+
+		qScore := questionScore(userAnswers, correctAnswers)
+		quiz.score += qScore // add to quiz score
 	}
 
 	fmt.Println("---------------------------------------------------------------")
-	fmt.Printf("You got %d / %d correct which is %.2f%% \n", int(quiz.score), int(quiz.total), quiz.score/quiz.total*100)
+	fmt.Printf("You got %.2f / %d correct which is %.2f%% \n", quiz.score, int(quiz.total), quiz.score/quiz.total*100)
 	fmt.Println("---------------------------------------------------------------")
 }
 
 func questionScore(userAnswers, correctAnswers map[string]bool) (score float64) {
 	l := float64(len(correctAnswers))
-	for c := range correctAnswers {
-		if userAnswers[c] != false {
+	for answer := range correctAnswers {
+		if userAnswers[answer] != false {
 			score += 100 / (100 * l)
 		}
 	}
@@ -142,4 +173,9 @@ func mapKeys(m map[string]bool) (keys []string) {
 	}
 
 	return
+}
+
+func letterFromIndex(i int) string {
+	var alphabet = "abcdefghijklmnopqrstuvwxyz"
+	return string(alphabet[i])
 }

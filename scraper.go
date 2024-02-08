@@ -1,11 +1,14 @@
 package main
 
 import (
+	"crypto/md5"
 	"fmt"
-	"nwp/config"
-	"nwp/models"
-	"nwp/shared"
+	"io"
 	"os"
+
+	"quizzy/config"
+	"quizzy/models"
+	"quizzy/shared"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
@@ -48,7 +51,12 @@ func scrape(filesDir string) (cachedQuestions []*models.Question, err error) {
 			if !seen[qText] {
 				// create question
 
+				h := md5.New()
+				io.WriteString(h, qText)
+				id := fmt.Sprintf("%x", h.Sum(nil))
+
 				question := &models.Question{
+					ID:      id,
 					Text:    qText,
 					Answers: []*models.Answer{},
 				}
@@ -57,8 +65,8 @@ func scrape(filesDir string) (cachedQuestions []*models.Question, err error) {
 				s.Find(CSS_ANSWER_BOX).Each(func(ii int, ss *goquery.Selection) {
 					aText := ss.Text()
 					answer := &models.Answer{
-						Text:   shared.SanitizeText(aText),
-						Letter: letterFromIndex(ii),
+						Text: shared.SanitizeText(aText),
+						// Letter: letterFromIndex(ii), // delete me
 					}
 
 					if strings.Contains(aText, "Missed)") {
